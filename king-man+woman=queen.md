@@ -61,8 +61,7 @@ $$
 assume that for any word $w$ in the vocabulary, we have
 
 $$
-\frac{\mathbb{P}(\mathrm{king}|w)}{\mathbb{P}(\mathrm{man}|w)}
-=
+\frac{\mathbb{P}(\mathrm{king}|w)}{\mathbb{P}(\mathrm{man}|w)} =
 \frac{\mathbb{P}(\mathrm{queen}|w)}{\mathbb{P}(\mathrm{woman}|w)}.
 $$
 
