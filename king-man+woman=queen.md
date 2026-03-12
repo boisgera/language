@@ -147,14 +147,15 @@ it's time to perform an approximation and say that the lowest eigenvalues
 are approximately zero).
 
 Now let $\Lambda := \mathrm{diag}(\lambda_1, \dots, \lambda_d)$. We have
+
 $$
 \mathrm{PMI} + c =
 Q_d^t \sqrt{\Lambda}^t \sqrt{\Lambda} Q_d
 = (\sqrt{\Lambda} Q_d)^t (\sqrt{\Lambda} Q_d)
 $$
 
-Now if $e(a)$ is the $a$-th column vector of $\sqrt{\Lambda} Q_r$, 
-for any pair of words $a$ and $b$, we have
+Defining $e(a)$ is the $a$-th column vector of $\sqrt{\Lambda} Q_r$, 
+for any pair of words $a$ and $b$ yields
 
 $$
 \mathrm{PMI}(a, b) + c = e(a) \cdot e(b)
