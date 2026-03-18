@@ -1,6 +1,9 @@
 # Python Standard Library
 import io
 import json
+import re
+from pathlib import Path
+import subprocess
 from typing import Generator
 import xml.etree.ElementTree as ET
 
@@ -38,7 +41,59 @@ def json_to_text(json: dict[str], document_title=None) -> str:
 
 # Main Script
 # ------------------------------------------------------------------------------
+def sanitize(title):
+    safe_title = re.sub(r'[/\\:*?"<>|]', "_", title)
+    return safe_title[:100]
+
+
 def main() -> None:
+    print("Computing the number of pages...")
+    total = int(
+        subprocess.check_output(["grep", "-c", "<page>", SIMPLE_WIKI + ".xml"])
+        .decode()
+        .strip()
+    )
+    Path("dump").mkdir(exist_ok=True)
+    for _, elt in tqdm.tqdm(page_iterator(), total=total):
+        assert elt.tag == "page"
+        title = elt.find("title").text
+        wiki_text = elt.find(".//text").text
+        if wiki_text:
+            safe_title = sanitize(title)
+            first_char = safe_title[0].upper()
+            subdir = first_char if first_char.isalpha() else "_"
+            subdir_path = Path("dump").joinpath(subdir)
+            subdir_path.mkdir(exist_ok=True)
+            output = subdir_path.joinpath(f"{safe_title}.mediawiki")
+            output.write_text(wiki_text)
+            subprocess.run(
+                [
+                    "pandoc",
+                    "-f",
+                    "mediawiki",
+                    "-t",
+                    "markdown",
+                    "-o",
+                    str(output.with_suffix(".md")),
+                    str(output),
+                ]
+            )
+            subprocess.run(
+                [
+                    "pandoc",
+                    "-f",
+                    "mediawiki",
+                    "-t",
+                    "plain",
+                    "-o",
+                    str(output.with_suffix(".txt")),
+                    str(output),
+                ]
+            )
+        elt.clear()
+
+
+def main_obsolete() -> None:
     pages = {}
     for _, elt in tqdm.tqdm(page_iterator()):
         assert elt.tag == "page"
@@ -47,15 +102,16 @@ def main() -> None:
         wiki_text = elt.find(".//text").text
         text = mwparserfromhell.parse(wiki_text)
         to_remove = [
-            link for link in text.filter_wikilinks(
+            link
+            for link in text.filter_wikilinks(
                 recursive=False,  # 🐉
-                )  
+            )
             if link.title.lower().startswith(("file:", "image:"))
         ]
         for link in to_remove:
             text.remove(link)
         text = text.strip_code()
-        
+
         pages[title] = text
         elt.clear()
 
