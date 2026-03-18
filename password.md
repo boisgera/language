@@ -17,11 +17,23 @@ associates to any clue $c$ a probability distribution for the password $p$
 given the clue $c$:
 
 $$
-c \in V \mapsto \left\(p \in V \mapsto \mathbb{P}(p|c)\right\).
+c \in V \mapsto \left\(p \in V \mapsto \mathbb{P}(p|c) \in [0, 1]\right\).
 $$
 
 If you have the probability distribution, you can always perform an
 $\argmax$ afterwards to find the word $p$ that maximizes $\mathbb{P}(p|c)$.
+
+Now, instead of probabilities, consider scores, defined as 
+unnormalized log-probabilities: for any $c$, any collection of $s(w|c)$
+such that
+
+$$
+\mathbb{P} (p|c) = \frac{\log s(p|c)}{\sum_{w in V} \log (w|c)}.
+$$
+
+Let's say that you have a large database of (successfully guessed) clue/password
+pairs. Technically, we model this as two random variables $C$ and $P$ in
+width values in $V$.
 
 
 
