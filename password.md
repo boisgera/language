@@ -53,17 +53,18 @@ What is the optimum funcion $s$ give what we have in our database?
 To begin with we can disintegrate the expectation by the value of $c$
 
 $$
-\ell =
-- \mathbb{E}_c \left[ \mathbb{E} \left[s(p|c) - \log \sum_{w \in D} \exp s(w|c) \middle|  c \right]\right]
+\ell = - \mathbb{E}_c \left[ \mathbb{E} \left[s(p|c) - \log \sum_{w \in D} \exp s(w|c) \middle|  c \right]\right]
 $$
 
 and note that if we have a complete freedom on the structure of the predictor
 $s$, then we have to optimize each term conditionned by $c$ independently to
 get the overall optimum. Now, given a $c$, let $s \in \mathbb{R}^n$ be 
 the (free) vector of scores:
+
 $$
 s_i := s(w_i|c), \;\;\; i=0,\dots, n-1.
 $$
+
 The gradient of 
 $s - \log \sum_{k=0}^{n-1} \exp s_k$
 
