@@ -131,3 +131,79 @@ criteria/literature.
 
 
 [Password]: https://en.wikipedia.org/wiki/Password_(American_game_show)
+
+
+## Negative Sampling
+
+In the guessing game, you have one shot to guess an unknown word given a 
+context word and you score if your guess is correct.
+For example, given the context "ice", it's sensible to guess "cold" or 
+"cream". We have recorded a huge dataset of such games and now we'd like
+to find a suitable predictor.
+
+Specifically, we wish to find the best "free architecture" score model: 
+for any pair of word $(w, c)$ we can select any real value $s(w, c)$
+as the score of the guess $w$ given the context $c$.
+
+Pick randomly a pair $(w, c)$ and, independently, 
+an extra context word $c'$; the loss $\ell$ associated to these samples is
+defined as
+$$
+\ell := a(-s(w, c)) + a(s(w, c')), \qquad
+a(x) := \log(1 + e^x).
+$$
+
+What model minimizes the expectation of $\ell$?
+
+-----
+
+We have 
+
+\begin{align*}
+\mathbb{E} \, \ell
+&=
+\sum_{w, c} \mathbb{P}(w \wedge  c) a(-s(w, c)) 
++ 
+\sum_{w, c} \mathbb{P} (w) \mathbb{P}(c) a(s(w, c)) \\
+&= 
+\sum_{w, c} 
+\mathbb{P}(w) \mathbb{P}(c) 
+\left[ \frac{\mathbb{P}(w,  c)}{\mathbb{P}(w) \mathbb{P}(c)} a(-s(w, c)) + a(s(w, c)) \right]
+\end{align*}
+
+Remember that 
+$$
+\mathrm{PMI}(w, c) := \log \frac{\mathbb{P}(w,  c)}{\mathbb{P}(w) \mathbb{P}(c)} 
+$$
+
+To maximize the sum, we have to maximize it wrt each $x = s(w, c)$ and since
+we have a sum of positively weighted terms, search for the solution to:
+
+$$
+\operatorname*{arg\,max}_x \, (\exp \mathrm{PMI}(w, c)) a(-x) + a(x).
+$$
+
+If we differentiate the expression wrt $x$, we get:
+
+$$
+\exp \mathrm{PMI}(w, c) \left(-\frac{e^{-x}}{1 + e^{-x}} \right)  + \frac{e^x}{1 + e^{x}}
+$$
+
+Equate this to 0 and you get
+
+$$
+\exp \mathrm{PMI}(w, c) = \frac{e^x}{1 + e^{x}} \frac{1 + e^{-x}}{{e^{-x}}}
+= \frac{e^x + 1}{e^{-x} + 1} = e^x
+$$
+
+and thus
+
+$$
+x = \mathrm{PMI}(w, c).
+$$
+
+Yay! The optimal scorer wrt the weird loss we have introduced is:
+
+$$
+s(w, c) = \mathrm{PMI}(w, c) = \log \frac{\mathbb{P}(w,  c)}{\mathbb{P}(w) \mathbb{P}(c)}. 
+$$
