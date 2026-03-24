@@ -1,5 +1,6 @@
-The Password Game
-================================================================================
+---
+title: The Guessing Game
+---
 
 In [Password], you have to guess a word (the password) given another word
 (the clue). For example, if I tell you "ice", you may be able to guess "cold"
@@ -13,28 +14,29 @@ $n$. Let $w_i$ be the word associated to the index $i \in \{0, \dots, n-1\}$.
 There is an immediate issue: there is in general no single "right answer" for 
 a clue, but instead several answers that are more or less likely. 
 Therefore, we will not build a predictor
-$c \in V \mapsto p \in D$ per se, but rather a function $f$ that
-associates to any clue $c$ a an estimate of the probability distribution for the password $p$ given the clue $c$.
-If you have the probability distribution, you can always find the word $p$ that maximizes $\mathbb{P}(p|c)$ afterwards anyway.
+$c \in V \mapsto w \in D$ per se, but rather a function $f$ that
+associates to any clue $c$ a an estimate of the probability distribution for the word to guess $w$ given the clue $c$.
+If you have the probability distribution, you can always find the word $w$ that maximizes $\mathbb{P}(w|c)$ afterwards anyway.
 
 Now, instead of probabilities, consider scores, defined as 
 (unnormalized) log-probabilities: for any $c$, $w \mapsto s(w|c)$
 such that
 
 $$
-\mathbb{P} (p|c) = \frac{\exp {s(p|c)}}{\sum_{w \in V} \exp{s(w|c)}}.
+\mathbb{P} (w|c) = \frac{\exp {s(p|c)}}{\sum_{w' \in V} \exp{s(w'|c)}}.
 $$
 
 You can always normalize a score to get a true log-probability with the
 formula
 
 $$
-\log \mathbb{P}(p|c) = s(p|c) - \log \sum_{w \in V} \exp s(w|c).
+\log \mathbb{P}(w|c) = s(w|c) - \log \sum_{w' \in V} \exp s(w'|c).
 $$
 
 
-Let's say that you have a large database of (successfully guessed) clue / password pairs and that you produce a predictor $s$ that associates to
-score $s(p|c)$ for the password $p$ given the clue $c$. To each score
+Let's say that you have a large database of (successfully guessed) 
+clue / guessed words pairs and that you produce a predictor $s$ that associates to
+score $s(w|c)$ for the guessed word $w$ given the clue $c$. To each score
 function $s(\cdot|c)$ you can associate a log-probability by the 
 substraction of a suitable constant.
 
@@ -42,46 +44,45 @@ Now consider as a loss function the opposite of the expectation of this
 log-probability of $p$ given $c$:
 
 $$
-\ell = - \mathbb{E} \left[ s(p|c) - \log \sum_{w \in D} \exp s(w|c) \right] 
+\ell = - \mathbb{E} \left[ s(w|c) - \log \sum_{w' \in V} \exp s(w'|c) \right] 
 $$
+
+(note: this is going to be expensive to compute ...)
 
 What is the optimum funcion $s$ give what we have in our database?
 To begin with we can disintegrate the expectation by the value of $c$
 
-$$
-\ell = - \mathbb{E}_c \left[ \mathbb{E} \left[s(p|c) - \log \sum_{w \in D} \exp s(w|c) \middle|  c \right]\right]
-$$
+\begin{align*}
+\ell 
+  &=
+  - \sum_{w, c} \mathbb{P}(w, c) \left[ s(w|c) - \log \sum_{w' \in V} \exp s(w'|c) \right] \\
+  &=
+  - \sum_{c} \mathbb{P}(c) \left[\sum_w \mathbb{P}(w|c) s(w|c) - \log \sum_{w' \in V} \exp s(w'|c) \right]
+\end{align*}
 
-and note that if we have a complete freedom on the structure of the predictor
-$s$, then we have to optimize each term conditionned by $c$ independently to
-get the overall optimum. Now, given a $c$, let $s \in \mathbb{R}^n$ be 
-the (free) vector of scores:
-
+and in order to minimize the loss, we have to maximize 
 $$
-s_i := s(w_i|c), \quad i=0,\dots, n-1.
+\sum_w \mathbb{P}(w|c) s(w|c) - \log \sum_{w' \in V} \exp s(w'|c)
 $$
-
-The partial derivative of 
-$s(p|c) - \log \sum_{k=0}^{n-1} \exp s_k$ with respect to $s_i$ is
-
-$$
-\{w_i = p\} - \frac{\exp s(w_i|c)}{\sum_{k=0}^{n-1} \exp s(w_k|c)}
-$$
-
-Taking the $\mathbb{E}[\cdot | c]$ of this expression yields
+for each possible context $c$. The derivative of this expression with
+respect to $x := s(w|c)$ for one specific value of $(w, c)$ is:
 
 $$
-\mathbb{P}(w_i|c) - \frac{\exp s(w_i|c)}{\sum_{k=0}^{n-1} \exp s(w_k|c)}
+\mathbb{P}(w|c) - \frac{e^x}{\sum_{w' \in V} \exp s(w'|c)}
 $$
 
-which is null (for a maximum of minus the conditional loss) when
-the predictor scores, interpreted as probabilities, match the conditional
-probabilities of the password given a context word!
+
+It is equal to zero iff $s(w|c)$ satisfies
+
+$$
+\frac{\exp s(w|c)}{\sum_{w' \in V} \exp s(w'|c)} = \mathbb{P}(w|c).
+$$
+
 
 In other words, with a free predictor architecture ($n \times n$
-free parameters) which is optimal, the prediction scores $s(p|c)$ 
+free parameters) which is optimal, the prediction scores $s(w|c)$ 
 reinterpreted as probabilities (by exponentiation and normalization)
-match the "true" conditional probabilities $\mathbb{P}(p|c)$.
+match the "true" conditional probabilities $\mathbb{P}(w|c)$.
 
 **Nota.** At first, I was thinking that in the realm of non-free architecture,
 one could introduce a $d \leq n$ and an embedding matrix 
@@ -207,3 +208,40 @@ Yay! The optimal scorer wrt the weird loss we have introduced is:
 $$
 s(w, c) = \mathrm{PMI}(w, c) = \log \frac{\mathbb{P}(w,  c)}{\mathbb{P}(w) \mathbb{P}(c)}. 
 $$
+
+**Warning.** To get some symmetry arguments right later on (without just getting
+the stuff "for free" from overly simplified notations), we need to assume that
+in our game, for every pair of words $(a, b)$, we have:
+
+$$
+\mathbb{P}(w=a, c=b) = \mathbb{P}(w=b, c=a).
+$$
+
+This is not *stupid*, but it's not *obvious*; it actually depends on us having
+an operational definition of guess and context that is really symmetric. For
+example, defining guess-to-context relationship as "begin in the same random
+phrase" works. Then of course with this fundamental assumption, we get
+for free
+$$
+\mathbb{P}(w=a) = \mathbb{P}(c=a)
+$$ 
+by marginalisation.
+
+**Note.** We could revisit the choice of the activation function but actually
+this is rather fragile!
+
+  - If we pick $a(x) = x$ instead of the softplus, in order to try to simply
+    compensate cheaply for the fact that raw scores are not normalized, we
+    get
+    $$
+    \ell = - ( s(w|c) - s(w'|c))
+    $$
+    but the gradient of the expectation is then always non-zero 
+    (unless $\mathrm{PMI}=1$
+    and then it's 0 everywhere) so that doesn't really work as expected.
+
+  - If we pick $a(x) = x^+$ (the ReLU activation function), the minimimu is
+    always for $x=0$... not very useful!
+
+**Note.** The negative sampling value and grad computations are far less 
+expensive than in the cross-entropy scenario!
