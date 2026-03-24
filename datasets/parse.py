@@ -2,6 +2,7 @@
 import io
 import json
 import re
+import pandoc
 from pathlib import Path
 import subprocess
 from typing import Generator
@@ -9,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 # Third-Party Libraries
 import mwparserfromhell
+import plumbum
 import tqdm
 
 
@@ -46,6 +48,70 @@ def sanitize(title):
     return safe_title[:100]
 
 
+def wiki_to_plain(wiki_text: str) -> str:
+    wikicode = mwparserfromhell.parse(wiki_text)
+
+    # Remove ref tags and their contents
+
+    for tag in wikicode.filter_tags(
+        matches=lambda t: t.tag.strip() in ("ref", "gallery", "math", "score")
+    ):
+        try:
+            wikicode.remove(tag)
+        except ValueError:
+            pass
+
+    # Remove all templates
+    for tpl in wikicode.filter_templates():
+        try:
+            wikicode.remove(tpl)
+        except ValueError:
+            pass
+
+    plain = wikicode.strip_code(normalize=True, collapse=True)
+
+    # Headings: == Foo == -> Foo
+    plain = re.sub(r"={2,}\s*(.+?)\s*={2,}", r"\1", plain)
+    # List/indent markers at line start
+    plain = re.sub(r"^[*#:;]+\s*", "", plain, flags=re.MULTILINE)
+    # Table markup lines
+    plain = re.sub(r"^\s*[|!{][|!}].*$", "", plain, flags=re.MULTILINE)
+    plain = re.sub(r"^\s*\|-.*$", "", plain, flags=re.MULTILINE)
+    # Leftover HTML comments
+    plain = re.sub(r"<!--.*?-->", "", plain, flags=re.DOTALL)
+    # Collapse blank lines (keep at most one)
+    plain = re.sub(r"\n{3,}", "\n\n", plain)
+
+    return plain.strip()
+
+
+def markdown_to_plain(markdown):
+    doc = pandoc.read(markdown)
+    Trash = tuple([
+        getattr(pandoc.types, name)
+        for name in [
+            "Figure",
+            "Image",
+            "Note",
+            "Table",
+        ]
+    ])
+    trash = []
+    for elt, path in pandoc.iter(doc, path=True):
+        if isinstance(elt, Trash):
+            trash.append(path[-1])
+        elif isinstance(elt, pandoc.types.Link):
+            target = elt[2]
+            if target[0].startswith("Category:"):
+                trash.append(path[-1])
+    for (holder, index) in reversed(trash):
+        del holder[index]
+
+    return pandoc.write(doc, format="plain")
+
+# TODO: generate all mediawiki files first, then perform the conversion in 
+#       parallel to get a ~8x boost.
+
 def main() -> None:
     print("Computing the number of pages...")
     total = int(
@@ -54,7 +120,9 @@ def main() -> None:
         .strip()
     )
     Path("dump").mkdir(exist_ok=True)
-    for _, elt in tqdm.tqdm(page_iterator(), total=total):
+    for i, (_, elt) in enumerate(tqdm.tqdm(page_iterator(), total=total)):
+        #if i == 1000:
+        #    break
         assert elt.tag == "page"
         title = elt.find("title").text
         wiki_text = elt.find(".//text").text
@@ -66,7 +134,7 @@ def main() -> None:
             subdir_path.mkdir(exist_ok=True)
             output = subdir_path.joinpath(f"{safe_title}.mediawiki")
             output.write_text(wiki_text)
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "pandoc",
                     "-f",
@@ -76,20 +144,22 @@ def main() -> None:
                     "-o",
                     str(output.with_suffix(".md")),
                     str(output),
-                ]
+                ],
+                stderr=subprocess.DEVNULL,
             )
-            subprocess.run(
-                [
-                    "pandoc",
-                    "-f",
-                    "mediawiki",
-                    "-t",
-                    "plain",
-                    "-o",
-                    str(output.with_suffix(".txt")),
-                    str(output),
-                ]
-            )
+            # output.unlink()
+            if result.returncode == 0:
+                markdown = open(output.with_suffix(".md"), "rt", encoding="utf-8").read()
+                markdown = markdown.replace("{{-}}", "")
+                try:
+                    plain_text = markdown_to_plain(markdown)
+                except plumbum.commands.processes.ProcessExecutionError:
+                    print("error in pandoc")
+                    plain_text = None
+                if plain_text is not None:
+                    output.with_suffix(".txt").write_text(plain_text)
+
+
         elt.clear()
 
 
