@@ -59,7 +59,7 @@ def mediawiki_to_plain_text(wiki_text):
     for holder, index in reversed(trash):
         del holder[index]
 
-    return pandoc.write(doc, format="plain")
+    return pandoc.write(doc, format="plain", options=["--wrap=none"])
 
 
 SUBDIRS = ["_"] + [chr(code) for code in range(ord("A"), ord("Z") + 1)]
@@ -93,7 +93,7 @@ def main() -> None:
     for subdir in SUBDIRS:
         subdir = Path("dump") / subdir
         files = list(subdir.glob("*.mediawiki"))
-        for file in tqdm.tqdm(files, desc=subdir, total=len(files)):
+        for file in tqdm.tqdm(files, desc=str(subdir), total=len(files)):
             wiki_text = file.open(encoding="utf-8").read()
             try:
                 plain_text = mediawiki_to_plain_text(wiki_text)

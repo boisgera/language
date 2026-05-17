@@ -12,6 +12,8 @@ requests = ">=2.32.5,<3"
 tqdm = ">=4.67.3,<5"
 mwparserfromhell = ">=0.7.2,<0.8"
 pandoc = "3.2.1.*"
+python = ">=3.14.4,<3.15"
+numpy = ">=2.4.5,<3"
 
 [pypi-dependencies]
 pandoc = ">=2.4, <3"
