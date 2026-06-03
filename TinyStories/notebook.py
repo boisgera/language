@@ -12,68 +12,75 @@ def _():
     import torch
     import tqdm
 
-    return ds, mo, pd, tqdm
+    return ds, mo, pd, torch, tqdm
 
 
 @app.cell
 def _(ds):
-    dataset = ds.load_dataset("karpathy/tinystories-gpt4-clean")
+    hg_dataset = ds.load_dataset("karpathy/tinystories-gpt4-clean")
+    return (hg_dataset,)
+
+
+@app.cell
+def _(hg_dataset):
+    hg_dataset["train"]
+    return
+
+
+@app.cell
+def _(hg_dataset):
+    hg_dataset["train"][0]
+    return
+
+
+@app.cell
+def _(hg_dataset):
+    full_dataset = hg_dataset["train"]["text"]
+    tiny_dataset = full_dataset[0:100]
+    dataset = tiny_dataset # start small!
+    dataset
     return (dataset,)
 
 
 @app.cell
 def _(dataset):
-    dataset["train"]
-    return
-
-
-@app.cell
-def _():
-    2_732_634 / 100 / 2 / 60 # hours
-    return
-
-
-@app.cell
-def _(dataset):
-    dataset["train"][0]
-    return
-
-
-@app.cell
-def _(dataset):
-    print(dataset["train"][0]["text"])
+    print(dataset[0])
     return
 
 
 @app.cell
 def _(dataset, mo):
-    mo.md(dataset["train"][0]["text"].replace("\n", "\n\n"))
+    mo.md(dataset[0].replace("\n", "\n\n"))
     return
 
 
 @app.cell
-def _():
-    def all_char_codes(dataset):
+def _(dataset):
+    NULL = 0
+    NEWLINE = 10
+
+    def char_codes(dataset):
         codes = set()
         for text in dataset: 
             codes = codes.union({ord(c) for c in text})
         l = list(codes)
         l.sort()
         return l
-    #print(all_char_codes(dataset["train"][:]["text"]))
-    return
+    
+    assert all(c in [NEWLINE] + list(range(32, 128)) for c in char_codes(dataset))
+    return (NULL,)
 
 
 @app.cell
-def _(dataset, igram, tqdm):
-    def train_tokenizer(dataset, vocab_size, return_tokenized_dataset=False):
+def _(dataset, tqdm):
+    def train_tokenizer(dataset, vocab_size):
         """
         Input: list of ASCII text and size of the vocabulary
         Output: merge rules
         """
         if vocab_size < 256:
             raise ValueError("The vocabulary size should be at least 256")
-    
+
         START_OR_END = 0
         corpus = [[START_OR_END] + list(text.encode("ascii")) + [START_OR_END] for text in dataset]
         new_token = 256
@@ -86,7 +93,7 @@ def _(dataset, igram, tqdm):
                 for digram in zip(tokens[:-1], tokens[1:]):
                     digram_count[digram] = digram_count.get(digram, 0) + 1
             digram = max(digram_count, key=digram_count.get)
-            merge_rules.append((new_token, igram))
+            merge_rules.append((new_token, digram))
 
             # Merge the digram
             for i, tokens in enumerate(corpus):
@@ -104,13 +111,11 @@ def _(dataset, igram, tqdm):
                 corpus[i] = new_tokens
 
             new_token += 1
-        if return_tokenized_dataset:
-            return (merge_rules, corpus)
-        else:
-            return merge_rules
+        return merge_rules
 
-    merge_rules = train_tokenizer(dataset["train"][:100]["text"], vocab_size=4_000)
-    return (merge_rules,)
+    vocab_size = 4_000
+    merge_rules = train_tokenizer(dataset, vocab_size=vocab_size)
+    return merge_rules, vocab_size
 
 
 @app.cell
@@ -140,33 +145,45 @@ def _(merge_rules, pd):
 @app.cell
 def _(tqdm):
     def tokenize(merge_rules, text):
-        tokens = list(text.encode("ascii"))
-        new_tokens = []
-        for merge_rule in tqdm.tqdm(merge_rules):
-            new_token, digram = merge_rule
-            j = 0
-            while j < len(tokens) - 1:
-                if (tokens[j], tokens[j + 1]) == digram: # merge the digram
-                    new_tokens.append(new_token)
-                    j += 2
-                else:
-                    new_tokens.append(tokens[j])
-                    j += 1
-            if j == len(tokens) - 1:
-                new_tokens.append(tokens[j])
-            tokens = new_tokens
+        if isinstance(text, str):
+            tokens = list(text.encode("ascii"))
             new_tokens = []
-        return tokens
+            for merge_rule in tqdm.tqdm(merge_rules):
+                new_token, digram = merge_rule
+                j = 0
+                while j < len(tokens) - 1:
+                    if (tokens[j], tokens[j + 1]) == digram: # merge the digram
+                        new_tokens.append(new_token)
+                        j += 2
+                    else:
+                        new_tokens.append(tokens[j])
+                        j += 1
+                if j == len(tokens) - 1:
+                    new_tokens.append(tokens[j])
+                tokens = new_tokens
+                new_tokens = []
+            return tokens
+        else: # mmm in this approach tqdm info sucks. Refactor this stuff for list of text first, then single text as a special case.
+            if not isinstance(text, list):
+                raise TypeError("text should be a string or a list of strings")
+            texts = text
+            return [tokenize(merge_rules, text) for text in texts]
 
     return (tokenize,)
 
 
 @app.cell
-def _(dataset, merge_rules, token_to_text, tokenize):
-    _tokens = tokenize(merge_rules, chr(0) + dataset["train"][100]["text"] + chr(0))
+def _(NULL, dataset, merge_rules, token_to_text, tokenize):
+    _tokens = tokenize(merge_rules, chr(NULL) + dataset[0] + chr(NULL))
     print(_tokens)
     print([token_to_text[_token] for _token in _tokens])
     return
+
+
+@app.cell
+def _(dataset, merge_rules, tokenize):
+    tokenized_dataset = tokenize(merge_rules, dataset)
+    return (tokenized_dataset,)
 
 
 @app.cell
@@ -185,14 +202,54 @@ def _():
 
 
 @app.cell
-def _():
-
+def _(tokenized_dataset):
+    tokenized_dataset
 
     return
 
 
 @app.cell
-def _():
+def _(pd, tokenized_dataset):
+    context_size = 8
+    contexts = []
+    nexts = []
+    for tokens in tokenized_dataset:
+        for i in range(len(tokens) - context_size):
+            context = tokens[i : i + context_size]
+            next = tokens[i + context_size]
+            contexts.append(context)
+            nexts.append(next)
+    pd.DataFrame({"context": contexts, "next_token": nexts})
+    return contexts, nexts
+
+
+@app.cell
+def _(contexts, nexts, torch):
+    X = torch.tensor(contexts, dtype=torch.int32)
+    y = torch.tensor(nexts)
+    return
+
+
+@app.cell
+def _(torch, vocab_size):
+    embedding_dim = 64
+    emb = torch.nn.Embedding(num_embeddings=vocab_size, embedding_dim=embedding_dim)
+    emb.weight
+    return emb, embedding_dim
+
+
+@app.cell
+def _(emb, torch):
+    emb(torch.tensor([0, 65, 256], dtype=torch.int32))
+    return
+
+
+@app.cell
+def _(embedding_dim, torch, vocab_size):
+    model = torch.nn.Sequential(
+        torch.nn.Embedding(vocab_size, embedding_dim),
+        torch.Linear(embedding_dim)
+    )
     return
 
 
