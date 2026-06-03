@@ -9,9 +9,10 @@ def _():
     import marimo as mo
     import datasets as ds
     import pandas as pd
+    import torch
     import tqdm
 
-    return ds, mo, tqdm
+    return ds, mo, pd, tqdm
 
 
 @app.cell
@@ -64,32 +65,35 @@ def _():
 
 
 @app.cell
-def _(dataset, tqdm):
-    def train_tokenizer(dataset, extra_tokens):
+def _(dataset, igram, tqdm):
+    def train_tokenizer(dataset, vocab_size, return_tokenized_dataset=False):
         """
-        Input: list of ASCII text and number of tokens to be stamped
+        Input: list of ASCII text and size of the vocabulary
         Output: merge rules
         """
-        corpus = [list(text.encode("ascii")) for text in dataset]
+        if vocab_size < 256:
+            raise ValueError("The vocabulary size should be at least 256")
+    
+        START_OR_END = 0
+        corpus = [[START_OR_END] + list(text.encode("ascii")) + [START_OR_END] for text in dataset]
         new_token = 256
         merge_rules = []
-        for _ in tqdm.tqdm(range(extra_tokens)):
-        
+        for _ in tqdm.tqdm(range(vocab_size - 256)):
+
             # Find the most frequent digram
             digram_count = {}
             for tokens in corpus:
                 for digram in zip(tokens[:-1], tokens[1:]):
                     digram_count[digram] = digram_count.get(digram, 0) + 1
-            top_digram = max(digram_count, key=digram_count.get)
-            # print(top_digram, digram_count[top_digram])
-            merge_rules.append((new_token, top_digram))
-        
+            digram = max(digram_count, key=digram_count.get)
+            merge_rules.append((new_token, igram))
+
             # Merge the digram
             for i, tokens in enumerate(corpus):
                 new_tokens = []
                 j = 0
                 while j < len(tokens) - 1:
-                    if (tokens[j], tokens[j + 1]) == top_digram:
+                    if (tokens[j], tokens[j + 1]) == digram:
                         new_tokens.append(new_token)
                         j += 2
                     else:
@@ -98,11 +102,14 @@ def _(dataset, tqdm):
                 if j == len(tokens) - 1:
                     new_tokens.append(tokens[j])
                 corpus[i] = new_tokens
-        
-            new_token += 1
-        return merge_rules
 
-    merge_rules = train_tokenizer(dataset["train"][:100]["text"], extra_tokens=4_000)
+            new_token += 1
+        if return_tokenized_dataset:
+            return (merge_rules, corpus)
+        else:
+            return merge_rules
+
+    merge_rules = train_tokenizer(dataset["train"][:100]["text"], vocab_size=4_000)
     return (merge_rules,)
 
 
@@ -113,16 +120,79 @@ def _(merge_rules):
 
 
 @app.cell
-def _(merge_rules):
-    def display_tokens(merge_rules):
-        token_to_text = {i: chr(i) for i in [10] + list(range(32, 127))}
+def _(merge_rules, pd):
+    def make_token_to_text(merge_rules):
+        START_OR_END = 0
+        NEWLINE = 10
+        token_to_text = {START_OR_END: "■"}
+        token_to_text.update({i: chr(i) for i in [NEWLINE] + list(range(32, 127))})
         for merge_rule in merge_rules:
             new_token, (token_1, token_2) = merge_rule
             text = token_to_text[token_1] + token_to_text[token_2]
             token_to_text[new_token] = text
         return token_to_text
 
-    print(display_tokens(merge_rules))
+    token_to_text = make_token_to_text(merge_rules)
+    pd.DataFrame({"token:": list(token_to_text.keys()), "text": list(token_to_text.values())})
+    return (token_to_text,)
+
+
+@app.cell
+def _(tqdm):
+    def tokenize(merge_rules, text):
+        tokens = list(text.encode("ascii"))
+        new_tokens = []
+        for merge_rule in tqdm.tqdm(merge_rules):
+            new_token, digram = merge_rule
+            j = 0
+            while j < len(tokens) - 1:
+                if (tokens[j], tokens[j + 1]) == digram: # merge the digram
+                    new_tokens.append(new_token)
+                    j += 2
+                else:
+                    new_tokens.append(tokens[j])
+                    j += 1
+            if j == len(tokens) - 1:
+                new_tokens.append(tokens[j])
+            tokens = new_tokens
+            new_tokens = []
+        return tokens
+
+    return (tokenize,)
+
+
+@app.cell
+def _(dataset, merge_rules, token_to_text, tokenize):
+    _tokens = tokenize(merge_rules, chr(0) + dataset["train"][100]["text"] + chr(0))
+    print(_tokens)
+    print([token_to_text[_token] for _token in _tokens])
+    return
+
+
+@app.cell
+def _():
+    # TODO: pre-compute a set of a sequence of n-words (data) + the next (result). (Issue: boundary prediction, when the context window is not full yet. Whatever ...)
+    return
+
+
+@app.cell
+def _():
+    # Feed CBOW a (batch) of tensor of int(32)s, with length the context window.
+
+    # TODO: next token prediction model. "Eat" (batch of) sequence of tokens, use an embedding linear op, concatenate the result,
+    # feed that to an MLP, get the unnormalized log p of the next token.
+    return
+
+
+@app.cell
+def _():
+
+
+    return
+
+
+@app.cell
+def _():
     return
 
 
