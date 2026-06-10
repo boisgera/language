@@ -10,6 +10,7 @@ comptime TINY_STORIES = "karpathy/tinystories-gpt4-clean"
 comptime Token = UInt16
 comptime Digram = Tuple[Token, Token]
 comptime DigramCount = Dict[Digram, UInt32]
+comptime MergeRule = Tuple[Digram, Token]
 
 def digram_frequencies(corpus: String) -> DigramCount:
     var count = DigramCount()
@@ -23,18 +24,8 @@ def digram_frequencies(corpus: String) -> DigramCount:
         first_token = second_token
     return count^
 
-def cmp_fn(a: Tuple[Digram, UInt32], b: Tuple[Digram, UInt32]) capturing -> Bool:
-    return a[1] > b[1]
-
 def main() raises:
-    var warnings = Python.import_module("warnings")
-    warnings.filterwarnings("ignore")
-
-    var ds = Python.import_module("datasets")
-    # var ps = Python.import_module("pandas")
-    # var torch = Python.import_module("torch")
-    # var tqdm = Python.import_module("tqdm")
-
+    var ds = Python.import_module("datasets") # from huggingface
     var t0 : Float64
 
     if not Path("corpus.bin").exists():
@@ -72,6 +63,8 @@ def main() raises:
     # TODO: iterate and store the merge rules
     # TODO: display the merge rules in a nice format (with the actual characters, not the token ids)
 
+    def cmp_fn(a: Tuple[Digram, UInt32], b: Tuple[Digram, UInt32]) capturing -> Bool:
+        return a[1] > b[1]
     sort[cmp_fn=cmp_fn](items)
     print("Top 10 digrams:")
     for i in range(10):
