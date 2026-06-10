@@ -37,6 +37,7 @@ def _(hg_dataset):
 def _(hg_dataset):
     full_dataset = hg_dataset["train"]["text"]
     tiny_dataset = full_dataset[0:100]
+    medium_dataset = full_dataset[0:1000]
     dataset = tiny_dataset # start small!
     dataset
     return (dataset,)
@@ -66,7 +67,7 @@ def _(dataset):
         l = list(codes)
         l.sort()
         return l
-    
+
     assert all(c in [NEWLINE] + list(range(32, 128)) for c in char_codes(dataset))
     return (NULL,)
 
@@ -76,7 +77,7 @@ def _(dataset, tqdm):
     def train_tokenizer(dataset, vocab_size):
         """
         Input: list of ASCII text and size of the vocabulary
-        Output: merge rules
+        Output: merge rules (+ tokenized corpus???)
         """
         if vocab_size < 256:
             raise ValueError("The vocabulary size should be at least 256")
@@ -142,38 +143,35 @@ def _(merge_rules, pd):
     return (token_to_text,)
 
 
-@app.cell
-def _(tqdm):
-    def tokenize(merge_rules, text):
-        if isinstance(text, str):
-            tokens = list(text.encode("ascii"))
-            new_tokens = []
-            for merge_rule in tqdm.tqdm(merge_rules):
-                new_token, digram = merge_rule
-                j = 0
-                while j < len(tokens) - 1:
-                    if (tokens[j], tokens[j + 1]) == digram: # merge the digram
-                        new_tokens.append(new_token)
-                        j += 2
-                    else:
-                        new_tokens.append(tokens[j])
-                        j += 1
-                if j == len(tokens) - 1:
+@app.function
+def tokenize(merge_rules, text):
+    if isinstance(text, str):
+        tokens = list(text.encode("ascii"))
+        new_tokens = []
+        for merge_rule in merge_rules: #tqdm.tqdm(merge_rules):
+            new_token, digram = merge_rule
+            j = 0
+            while j < len(tokens) - 1:
+                if (tokens[j], tokens[j + 1]) == digram: # merge the digram
+                    new_tokens.append(new_token)
+                    j += 2
+                else:
                     new_tokens.append(tokens[j])
-                tokens = new_tokens
-                new_tokens = []
-            return tokens
-        else: # mmm in this approach tqdm info sucks. Refactor this stuff for list of text first, then single text as a special case.
-            if not isinstance(text, list):
-                raise TypeError("text should be a string or a list of strings")
-            texts = text
-            return [tokenize(merge_rules, text) for text in texts]
-
-    return (tokenize,)
+                    j += 1
+            if j == len(tokens) - 1:
+                new_tokens.append(tokens[j])
+            tokens = new_tokens
+            new_tokens = []
+        return tokens
+    else: # mmm in this approach tqdm info sucks. Refactor this stuff for list of text first, then single text as a special case.
+        if not isinstance(text, list):
+            raise TypeError("text should be a string or a list of strings")
+        texts = text
+        return [tokenize(merge_rules, text) for text in texts]
 
 
 @app.cell
-def _(NULL, dataset, merge_rules, token_to_text, tokenize):
+def _(NULL, dataset, merge_rules, token_to_text):
     _tokens = tokenize(merge_rules, chr(NULL) + dataset[0] + chr(NULL))
     print(_tokens)
     print([token_to_text[_token] for _token in _tokens])
@@ -181,7 +179,7 @@ def _(NULL, dataset, merge_rules, token_to_text, tokenize):
 
 
 @app.cell
-def _(dataset, merge_rules, tokenize):
+def _(dataset, merge_rules):
     tokenized_dataset = tokenize(merge_rules, dataset)
     return (tokenized_dataset,)
 
@@ -204,7 +202,6 @@ def _():
 @app.cell
 def _(tokenized_dataset):
     tokenized_dataset
-
     return
 
 
@@ -235,7 +232,7 @@ def _(torch, vocab_size):
     embedding_dim = 64
     emb = torch.nn.Embedding(num_embeddings=vocab_size, embedding_dim=embedding_dim)
     emb.weight
-    return emb, embedding_dim
+    return (emb,)
 
 
 @app.cell
@@ -245,11 +242,11 @@ def _(emb, torch):
 
 
 @app.cell
-def _(embedding_dim, torch, vocab_size):
-    model = torch.nn.Sequential(
-        torch.nn.Embedding(vocab_size, embedding_dim),
-        torch.Linear(embedding_dim)
-    )
+def _():
+    #model = torch.nn.Sequential(
+    #    torch.nn.Embedding(vocab_size, embedding_dim),
+    #    torch.Linear(embedding_dim)
+    #)
     return
 
 
