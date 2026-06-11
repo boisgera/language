@@ -9,33 +9,43 @@ comptime TINY_STORIES = "karpathy/tinystories-gpt4-clean"
 
 comptime Token = UInt16
 comptime Digram = Tuple[Token, Token]
-comptime DigramCount = Dict[Digram, UInt32]
+comptime DigramLocations = Dict[Digram, List[Int]]
 comptime MergeRule = Tuple[Token, Digram]
 
 
-def digram_frequencies(tokens: List[Token]) -> DigramCount:
-    var count = DigramCount()
+def build_digram_locations(tokens: List[Token]) -> DigramLocations:
+    var locations = DigramLocations()
     var first_token = tokens[0]
     var second_token: Token
     for i in range(1, len(tokens)):
         second_token = tokens[i]
         var digram = (first_token, second_token)
-        count[digram] = count.get(digram, 0) + 1
+        if digram not in locations:
+            locations[digram] = []
+        try:
+            locations[digram].append(i - 1)
+        except KeyError:
+            assert False # unreachable
         first_token = second_token
-    return count^
+    return locations^
 
-
-def merge_tokens(tokens: List[Token], merge_rule: MergeRule) -> List[Token]:
-    var new_tokens: List[Token] = []
-    var i = 0
-    while i < len(tokens):
-        if i < len(tokens) - 1 and (tokens[i], tokens[i + 1]) == merge_rule[1]:
-            new_tokens.append(merge_rule[0])
-            i += 2
-        else:
-            new_tokens.append(tokens[i])
-            i += 1
-    return new_tokens^
+def merge_tokens(
+    mut tokens: List[Token],
+    mut prev: List[Int],
+    mut next: List[Int],
+    mut digram_locations: DigramLocations,
+    merge_rule: MergeRule,
+):
+    var token = merge_rule[0]
+    var digram = merge_rule[1]
+    try:
+        ref locations = digram_locations[digram]
+        for index in locations:
+            var next_index = next[index]
+        # TODO ...
+        locations.clear()
+    except KeyError:
+        assert False
 
 
 def display_merge_rules(merge_rules: List[MergeRule]):
@@ -73,6 +83,8 @@ def train(
     var ds = Python.import_module("datasets")  # from huggingface
     var merge_rules: List[MergeRule] = []
     var tokens: List[Token] = []
+    var prev: List[Int] = []
+    var next: List[Int] = []
 
     # Load the corpus
     if not Path("corpus.bin").exists():
@@ -97,16 +109,19 @@ def train(
                 round(Float64(corpus.byte_length()) / 1000**2, 2)
             )
         )
-    for byte in corpus.as_bytes():
+    for i, byte in enumerate(corpus.as_bytes()):
         tokens.append(Token(byte))
+        prev.append(i - 1)  # -1 when no prev token.
+        next.append(i + 1)
+    next[-1] = -1  # for the last token
     print(perf_counter() - t0, "seconds")
     print()
+
+    var digram_locations = build_digram_locations(tokens)
 
     # Find the most frequent digram, merge the tokens, update the merge rules
     t0 = perf_counter()
     for next_token in range(Token(256), vocab_size):
-        #t_start = perf_counter()
-        var digram_count = digram_frequencies(tokens)
         var top_digram: Digram = (0, 0)
         var top_count: UInt32 = 0
         for entry in digram_count.items():
@@ -114,11 +129,7 @@ def train(
                 top_count = entry.value
                 top_digram = entry.key
         merge_rule = (next_token, top_digram)
-        #t_end = perf_counter()
-        #print("Digram scan: {} seconds".format(t_end - t_start))
-        #t_start = t_end
-        tokens = merge_tokens(tokens, merge_rule)
-        #print("Merge tokens: {} seconds".format(perf_counter() - t_start))
+        tokens = merge_tokens(tokens, prev, next, digram_count, merge_rule)
         merge_rules.append(merge_rule)
     # TODO: display the merge rules in a nice format (with the actual characters, not the token ids)
     t1 = perf_counter() - t0
