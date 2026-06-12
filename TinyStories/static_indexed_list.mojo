@@ -1,6 +1,7 @@
+comptime Item = Defaultable & Copyable & ImplicitlyDestructible & Writable
 
 
-struct StaticLinkedListIter[T: Copyable & Writable, origin: Origin](Copyable, Iterator):
+struct StaticLinkedListIter[T: Item, origin: Origin](Iterator):
     comptime Element = Self.T
     var plist: Pointer[StaticLinkedList[Self.T], Self.origin]
     var current: Int
@@ -12,7 +13,9 @@ struct StaticLinkedListIter[T: Copyable & Writable, origin: Origin](Copyable, It
     def __iter__(self) -> ref[self] Self:
         return self
 
-    def __next__(mut self) raises StopIteration -> ref[self.plist[].list] Self.T:
+    def __next__(
+        mut self,
+    ) raises StopIteration -> ref[self.plist[].list] Self.T:
         if self.current == StaticLinkedList[Self.T].NO_NEXT:
             raise StopIteration()
         ref list = self.plist[]
@@ -21,14 +24,10 @@ struct StaticLinkedListIter[T: Copyable & Writable, origin: Origin](Copyable, It
         return value
 
 
+comptime ListLike = Boolable & Copyable & Iterable & Sized & Writable
 
-struct StaticLinkedList[T: Copyable & Writable](
-    Boolable,
-    Copyable,
-    Iterable,
-    Sized,
-    Writable,
-):
+
+struct StaticLinkedList[T: Item](ListLike):
     var list: List[Self.T]
     var prev: List[Int]
     var next: List[Int]
@@ -37,9 +36,7 @@ struct StaticLinkedList[T: Copyable & Writable](
     var head: Int
 
     comptime IteratorType[
-        iterable_mut: Bool, 
-        //, 
-        iterable_origin: Origin[mut=iterable_mut]
+        iterable_mut: Bool, //, iterable_origin: Origin[mut=iterable_mut]
     ]: Iterator = StaticLinkedListIter[Self.T, iterable_origin]
 
     comptime NO_PREV = -1
@@ -64,9 +61,12 @@ struct StaticLinkedList[T: Copyable & Writable](
         return self.list[index]
 
     def __setitem__(mut self, index: Int, var value: Self.T):
-        self.list[index] = value^ 
+        self.list[index] = value^
 
-    def remove(mut self, index: Int):
+    def pop(mut self: Self, index: Int) -> Self.T:
+        var t = Self.T()
+        swap(self.list[index], t)
+
         var p = self.prev[index]
         var n = self.next[index]
         if p != Self.NO_PREV:
@@ -75,6 +75,11 @@ struct StaticLinkedList[T: Copyable & Writable](
             self.head = n
         if n != Self.NO_NEXT:
             self.prev[n] = p
+
+        return t^
+
+    def remove(mut self, index: Int):
+        _ = self.pop(index)
 
     def write_to[WriterType: Writer](self, mut writer: WriterType):
         writer.write("[")
@@ -94,7 +99,7 @@ struct StaticLinkedList[T: Copyable & Writable](
             var i = self.next[self.head]
             while i != Self.NO_NEXT:
                 count += 1
-                i = self.next[i] # Bug, out of bounds.
+                i = self.next[i]  # Bug, out of bounds.
             return count
 
     def __bool__(self) -> Bool:

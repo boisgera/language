@@ -5,6 +5,8 @@ from std.pathlib import Path
 from std.time import perf_counter
 from std.python import Python
 
+from static_indexed_list import StaticLinkedList
+
 comptime NULL = "\x00"
 comptime TINY_STORIES = "karpathy/tinystories-gpt4-clean"
 
@@ -37,17 +39,8 @@ def remove[T: Equatable & Copyable](mut list: List[T], value: T):
             _ = list.pop(i)
             return
 
-
-
-
-
-# TODO: review this in detail.
-# Open question: replace the tokens/prev/next by a dedicated structure that
-# abstracts the machinery?
 def merge_tokens(
-    mut tokens: List[Token],
-    mut prev: List[Int],
-    mut next: List[Int],
+    mut tokens: StaticLinkedList[Token],
     mut digram_locations: DigramLocations,
     merge_rule: MergeRule,
 ):
@@ -55,7 +48,7 @@ def merge_tokens(
     var digram = merge_rule[1]
     try:
         while digram_locations[digram]:
-            index = digram_locations[digram][0]
+            index = digram_locations[digram].pop(0)
             # Update the token
             tokens[index] = token
             # Rewire: skip the next token
