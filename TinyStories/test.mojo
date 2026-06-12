@@ -5,6 +5,9 @@ def main():
     var data = [1, 2, 3, 4, 5]
     var sll = StaticLinkedList(data^)
 
+    # String representation
+    print("sll:", sll)
+
     # Basic iteration
     print("Forward:")
     for x in sll:
