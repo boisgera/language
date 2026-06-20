@@ -1,12 +1,11 @@
 comptime Item = Defaultable & Copyable & ImplicitlyDestructible & Writable
 
-
-struct StaticLinkedListIter[T: Item, origin: Origin](Iterator):
+struct StaticIndexedListIter[T: Item, origin: Origin](Iterator):
     comptime Element = Self.T
-    var plist: Pointer[StaticLinkedList[Self.T], Self.origin]
+    var plist: Pointer[StaticIndexedList[Self.T], Self.origin]
     var current: Int
 
-    def __init__(out self, ref[Self.origin] list: StaticLinkedList[Self.T]):
+    def __init__(out self, ref[Self.origin] list: StaticIndexedList[Self.T]):
         self.plist = Pointer(to=list)
         self.current = self.plist[].head
 
@@ -16,7 +15,7 @@ struct StaticLinkedListIter[T: Item, origin: Origin](Iterator):
     def __next__(
         mut self,
     ) raises StopIteration -> ref[self.plist[].list] Self.T:
-        if self.current == StaticLinkedList[Self.T].NO_NEXT:
+        if self.current == StaticIndexedList[Self.T].NO_NEXT:
             raise StopIteration()
         ref list = self.plist[]
         ref value = list[self.current]
@@ -27,7 +26,7 @@ struct StaticLinkedListIter[T: Item, origin: Origin](Iterator):
 comptime ListLike = Boolable & Copyable & Iterable & Sized & Writable
 
 
-struct StaticLinkedList[T: Item](ListLike):
+struct StaticIndexedList[T: Item](ListLike):
     var list: List[Self.T]
     var prev: List[Int]
     var next: List[Int]
@@ -37,7 +36,7 @@ struct StaticLinkedList[T: Item](ListLike):
 
     comptime IteratorType[
         iterable_mut: Bool, //, iterable_origin: Origin[mut=iterable_mut]
-    ]: Iterator = StaticLinkedListIter[Self.T, iterable_origin]
+    ]: Iterator = StaticIndexedListIter[Self.T, iterable_origin]
 
     comptime NO_PREV = -1
     comptime NO_NEXT = -1
@@ -62,6 +61,12 @@ struct StaticLinkedList[T: Item](ListLike):
 
     def __setitem__(mut self, index: Int, var value: Self.T):
         self.list[index] = value^
+
+    def has_prev(self: Self, index: Int) -> Bool:
+        return self.prev[index] != Self.NO_PREV
+
+    def has_next(self: Self, index: Int) -> Bool:
+        return self.next[index] != Self.NO_NEXT
 
     def pop(mut self: Self, index: Int) -> Self.T:
         var t = Self.T()
@@ -88,8 +93,8 @@ struct StaticLinkedList[T: Item](ListLike):
             writer.write(", " if i < len(self) - 1 else "")
         writer.write("]")
 
-    def __iter__(ref self) -> StaticLinkedListIter[Self.T, origin_of(self)]:
-        return StaticLinkedListIter(self)
+    def __iter__(ref self) -> StaticIndexedListIter[Self.T, origin_of(self)]:
+        return StaticIndexedListIter(self)
 
     def __len__(self) -> Int:
         if self.head == Self.NO_HEAD:

@@ -5,32 +5,33 @@ from std.pathlib import Path
 from std.time import perf_counter
 from std.python import Python
 
-from static_indexed_list import StaticLinkedList
+from static_indexed_list import StaticIndexedList
 
 comptime NULL = "\x00"
 comptime TINY_STORIES = "karpathy/tinystories-gpt4-clean"
 
 comptime Token = UInt16
 comptime Digram = Tuple[Token, Token]
-comptime DigramLocations = Dict[Digram, List[Int]]
+comptime DigramIndices = Dict[Digram, List[Int]]
 comptime MergeRule = Tuple[Token, Digram]
 
 
-def build_digram_locations(tokens: List[Token]) -> DigramLocations:
-    var locations = DigramLocations()
+# Could abstract the argument into Iterable[Token]
+def build_digram_indices(tokens: StaticIndexedList[Token]) -> DigramIndices:
+    var indices = DigramIndices()
     var first_token = tokens[0]
     var second_token: Token
     for i in range(1, len(tokens)):
         second_token = tokens[i]
         var digram = (first_token, second_token)
-        if digram not in locations:
-            locations[digram] = []
+        if digram not in indices:
+            indices[digram] = []
         try:
-            locations[digram].append(i - 1)
+            indices[digram].append(i - 1)
         except KeyError:
             assert False  # unreachable
         first_token = second_token
-    return locations^
+    return indices^
 
 
 def remove[T: Equatable & Copyable](mut list: List[T], value: T):
@@ -40,40 +41,45 @@ def remove[T: Equatable & Copyable](mut list: List[T], value: T):
             return
 
 def merge_tokens(
-    mut tokens: StaticLinkedList[Token],
-    mut digram_locations: DigramLocations,
+    mut tokens: StaticIndexedList[Token],
+    mut digram_indices: DigramIndices,
     merge_rule: MergeRule,
 ):
     var token = merge_rule[0]
     var digram = merge_rule[1]
+    var new_digram : Digram
     try:
-        while digram_locations[digram]:
-            index = digram_locations[digram].pop(0)
-            # Update the token
-            tokens[index] = token
-            # Rewire: skip the next token
-            var next_index = next[index]
-            var next_next_index = next[next_index]
-            next[index] = next_next_index
-            if next_next_index != -1:
-                prev[next_next_index] = index
+        while digram_indices[digram]:
+            index = digram_indices[digram].pop(0)
+
             # Update the digram locations
-            remove(digram_locations[digram], index)
-            var prev_index = prev[index]
-            if prev_index != -1:
+            if tokens.has_prev(index):
+                prev_index = tokens.prev[index]
                 remove(
-                    digram_locations[(tokens[prev_index], digram[0])],
+                    digram_indices[(tokens[prev_index], digram[0])],
                     prev_index,
                 )
-                digram_locations[(token, tokens[next_next_index])].append(
-                    prev_index
-                )
-            if next_next_index != -1:
+                new_digram = (tokens[prev_index], token)
+                if new_digram not in digram_indices:
+                    digram_indices[new_digram] = []
+                digram_indices[new_digram].append(prev_index)
+
+            next_index = tokens.next[index]
+            if tokens.has_next(next_index):
+                next_next_index = tokens.next[index]
                 remove(
-                    digram_locations[(digram[1], tokens[next_next_index])],
+                    digram_indices[(digram[1], tokens[next_next_index])],
                     next_index,
                 )
-                digram_locations[(token, tokens[next_next_index])].append(index)
+                new_digram = (token, tokens[next_next_index])
+                if new_digram not in digram_indices:
+                    digram_indices[new_digram] = []
+                digram_indices[new_digram].append(index)
+            
+            # Update the token and remove the next one
+            tokens[index] = token
+            tokens.remove(next_index)
+
     except KeyError:
         assert False
 
@@ -112,7 +118,7 @@ def train(
 ) raises:
     var ds = Python.import_module("datasets")  # from huggingface
     var merge_rules: List[MergeRule] = []
-    var tokens: List[Token] = []
+    var tokens: StaticIndexedList[Token] = []
     var prev: List[Int] = []
     var next: List[Int] = []
 
@@ -139,15 +145,13 @@ def train(
                 round(Float64(corpus.byte_length()) / 1000**2, 2)
             )
         )
-    for i, byte in enumerate(corpus.as_bytes()):
-        tokens.append(Token(byte))
-        prev.append(i - 1)  # -1 when no prev token.
-        next.append(i + 1)
-    next[len(next) - 1] = -1  # for the last token
+    
+    tokens = StaticIndexedList[Token]([Token(byte) for byte in corpus.as_bytes()])
+
     print(perf_counter() - t0, "seconds")
     print()
 
-    var digram_locations = build_digram_locations(tokens)
+    var digram_indices = build_digram_indices(tokens)
 
     # Find the most frequent digram, merge the tokens, update the merge rules
     t0 = perf_counter()
