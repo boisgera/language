@@ -15,33 +15,29 @@ struct StaticIndexedListIter[T: Item, origin: Origin](Iterator):
     var plist: Pointer[StaticIndexedList[Self.T], Self.origin]
     var index: Int
 
-    def __init__(out self, ref[Self.origin] list: StaticIndexedList[Self.T]):
+    def __init__(
+        out self,
+        ref[Self.origin] list: StaticIndexedList[Self.T],
+        index: Int = 0,
+    ):
         self.plist = Pointer(to=list)
-        self.index = -1
+        self.index = index
 
     def next(mut self) raises StopIteration -> ref[self.plist[].list] Self.T:
-        var new_index: Int
-        if self.index < -1:
-            new_index = 0  # first index
-        else:
-            new_index = self.index + 1
-        if new_index >= len(self.plist[]):
+        ref list = self.plist[]
+        if self.index > list.tail:
             raise StopIteration()
-        else:
-            self.index = new_index
-            return self.plist[][new_index]
+        ref value = list[self.index]
+        self.index = list.next[self.index]
+        return value
 
     def prev(mut self) raises StopIteration -> ref[self.plist[].list] Self.T:
-        var new_index: Int
-        if self.index >= len(self.plist[]):
-            new_index = len(self.plist[]) - 1  # last index
-        else:
-            new_index = self.index - 1
-        if new_index < 0:
+        ref list = self.plist[]
+        if self.index < list.head:
             raise StopIteration()
-        else:
-            self.index = new_index
-            return self.plist[][new_index]
+        ref value = list[self.index]
+        self.index = list.prev[self.index]
+        return value
 
     def __iter__(self) -> ref[self] Self:
         return self
@@ -53,16 +49,18 @@ struct StaticIndexedListIter[T: Item, origin: Origin](Iterator):
         return self.next()
 
 
-comptime ListLike = Boolable & Copyable & Equatable & Iterable & Sized & Writable
+comptime ListLike = (
+    Boolable & Copyable & Equatable & Iterable & Sized & Writable
+)
 
 
 struct StaticIndexedList[T: Item](ListLike):
     var list: List[Self.T]
-    var indices: List[Int] # Nah, we need some static stuff...
-    # Or max indices a pair of (prev, next)
-    # and then we're back to a dynamic computation of the size, that we 
-    # may cache, we need a head and a tail, that we need to update, etc. 
-    # call this list `prev_next`?
+    var next: List[Int]
+    var prev: List[Int]
+    var head: Int
+    var tail: Int
+    var size: Int
     comptime IteratorType[
         iterable_mut: Bool,
         //,
@@ -70,7 +68,11 @@ struct StaticIndexedList[T: Item](ListLike):
     ]: Iterator = StaticIndexedListIter[Self.T, iterable_origin]
 
     def __init__(out self, var list: List[Self.T]):
-        self.indices = List(range(len(list)))
+        self.next = List(range(1, len(list) + 1))
+        self.prev = List(range(-1, len(list) - 1))
+        self.head = 0
+        self.tail = len(list) - 1
+        self.size = len(list)
         self.list = list^
 
     def __getitem__(ref self, index: Int) -> ref[self.list] Self.T:
@@ -79,19 +81,21 @@ struct StaticIndexedList[T: Item](ListLike):
     def __setitem__(mut self, index: Int, var value: Self.T):
         self.list[index] = value^
 
-    @always_inline
-    def has_prev(self: Self, index: Int) -> Bool:
-        return index > 0
-
-    @always_inline
-    def has_next(self: Self, index: Int) -> Bool:
-        return index < len(self) - 1
-
     def pop(mut self: Self, index: Int) -> Self.T:
-        # ⚠️ will output garbage when index is not in self.indices
+        # ⚠️ will output garbage when is not valid anymore
         var t = Self.T()
         swap(self.list[index], t)
-        List_remove_first(self.indices, index)
+        var prev_index = self.prev[index]
+        var next_index = self.next[index]
+        if prev_index >= 0:
+            self.next[prev_index] = next_index
+        else:
+            self.head = next_index
+        if next_index < len(self):
+            self.prev[next_index] = prev_index
+        else:
+            self.tail = prev_index
+        self.size -= 1
         return t^
 
     def write_to[WriterType: Writer](self, mut writer: WriterType):
@@ -114,7 +118,7 @@ struct StaticIndexedList[T: Item](ListLike):
 
     @always_inline
     def __len__(self) -> Int:
-        return len(self.list)
+        return self.size
 
     @always_inline
     def __bool__(self) -> Bool:

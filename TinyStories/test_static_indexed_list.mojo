@@ -11,10 +11,10 @@ def test_iter() raises:
     for i in range(len(items)):
         assert_equal(items[i], [4, 2, 1][i])
 
-def test_remove() raises:
+def test_pop() raises:
     var items = StaticIndexedList([4, 2, 1])
     _ = items.pop(1)
-    assert_equal(List(items), [4, 2])
+    assert_equal(List(items), [4, 1])
     _ = items.pop(1)
     assert_equal(List(items), [4])
     _ = items.pop(0)
@@ -27,7 +27,6 @@ def test_equal() raises:
     assert_true(items1 == items2)
     assert_true(items1 != items3)
     _ = items2.pop(2)
-    print(items2)
     assert_true(items1 != items2)
     assert_true(items2 == items3)
 

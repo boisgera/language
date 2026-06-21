@@ -53,32 +53,34 @@ def merge_tokens(
             index = digram_indices[digram].pop(0)
 
             # Update the digram locations
-            if tokens.has_prev(index):
-                prev_index = tokens.prev[index]
+            prev_index = tokens.prev[index]
+            if prev_index >= tokens.head:
+                var prev_token = tokens[prev_index]
                 remove(
-                    digram_indices[(tokens[prev_index], digram[0])],
+                    digram_indices[(prev_token, digram[0])],
                     prev_index,
                 )
-                new_digram = (tokens[prev_index], token)
+                new_digram = (prev_token, token)
                 if new_digram not in digram_indices:
                     digram_indices[new_digram] = []
                 digram_indices[new_digram].append(prev_index)
 
             next_index = tokens.next[index]
-            if tokens.has_next(next_index):
+            if next_index <= tokens.tail:
                 next_next_index = tokens.next[index]
+                next_next_token = tokens[next_next_index]
                 remove(
-                    digram_indices[(digram[1], tokens[next_next_index])],
+                    digram_indices[(digram[1], next_next_token)],
                     next_index,
                 )
-                new_digram = (token, tokens[next_next_index])
+                new_digram = (token, next_next_token)
                 if new_digram not in digram_indices:
                     digram_indices[new_digram] = []
                 digram_indices[new_digram].append(index)
             
             # Update the token and remove the next one
             tokens[index] = token
-            tokens.remove(next_index)
+            _ = tokens.pop(next_index)
 
     except KeyError:
         assert False
