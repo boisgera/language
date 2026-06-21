@@ -50,10 +50,12 @@ def merge_tokens(
     var new_digram : Digram
     try:
         while digram_indices[digram]:
-            index = digram_indices[digram].pop(0)
-
+            print("1.", digram, digram_indices[digram])
+            var index = digram_indices[digram].pop(0)
+            print("2.", index)
             # Update the digram locations
-            prev_index = tokens.prev[index]
+            var prev_index = tokens.prev[index]
+            print("-")
             if prev_index >= tokens.head:
                 var prev_token = tokens[prev_index]
                 remove(
@@ -64,24 +66,33 @@ def merge_tokens(
                 if new_digram not in digram_indices:
                     digram_indices[new_digram] = []
                 digram_indices[new_digram].append(prev_index)
+            
+            print("--")
 
-            next_index = tokens.next[index]
+            var next_index = tokens.next[index]
             if next_index <= tokens.tail:
-                next_next_index = tokens.next[index]
-                next_next_token = tokens[next_next_index]
+                var next_next_index = tokens.next[index]
+                var next_next_token = tokens[next_next_index]
+                print("reachable")
+                print(digram_indices, (digram[1], next_next_token)) # digram not found
+                _ = digram_indices[(digram[1], next_next_token)].copy()
+                print("unreachable")
                 remove(
                     digram_indices[(digram[1], next_next_token)],
                     next_index,
-                )
+                ) # issue here?
+                
                 new_digram = (token, next_next_token)
                 if new_digram not in digram_indices:
                     digram_indices[new_digram] = []
                 digram_indices[new_digram].append(index)
-            
+        
+            print("---") # We never reach this point.
+
             # Update the token and remove the next one
             tokens[index] = token
             _ = tokens.pop(next_index)
-
+            print("3.", tokens)
     except KeyError:
         assert False
 
