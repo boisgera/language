@@ -1,4 +1,6 @@
-comptime Item = Defaultable & Copyable & ImplicitlyDestructible & Writable
+from std.iter import zip
+
+comptime Item = Defaultable & Copyable & Equatable &ImplicitlyDestructible & Writable
 
 struct StaticIndexedListIter[T: Item, origin: Origin](Iterator):
     comptime Element = Self.T
@@ -23,9 +25,9 @@ struct StaticIndexedListIter[T: Item, origin: Origin](Iterator):
         return value
 
 
-comptime ListLike = Boolable & Copyable & Iterable & Sized & Writable
+comptime ListLike = Boolable & Copyable & Equatable & Iterable & Sized & Writable
 
-
+# TODO: get rid of prev and next lists, instead maintain a list of used indices.
 struct StaticIndexedList[T: Item](ListLike):
     var list: List[Self.T]
     var prev: List[Int]
@@ -92,6 +94,14 @@ struct StaticIndexedList[T: Item](ListLike):
             elt.write_to(writer)
             writer.write(", " if i < len(self) - 1 else "")
         writer.write("]")
+
+    def __eq__(self: Self, other: Self) -> Bool:
+        if len(self) != len(other):
+            return False
+        for elt1, elt2 in zip(self, other):
+            if elt1 != elt2:
+                return False
+        return True
 
     def __iter__(ref self) -> StaticIndexedListIter[Self.T, origin_of(self)]:
         return StaticIndexedListIter(self)
