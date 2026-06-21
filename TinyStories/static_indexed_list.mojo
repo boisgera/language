@@ -58,8 +58,11 @@ comptime ListLike = Boolable & Copyable & Equatable & Iterable & Sized & Writabl
 
 struct StaticIndexedList[T: Item](ListLike):
     var list: List[Self.T]
-    var indices: List[Int]
-
+    var indices: List[Int] # Nah, we need some static stuff...
+    # Or max indices a pair of (prev, next)
+    # and then we're back to a dynamic computation of the size, that we 
+    # may cache, we need a head and a tail, that we need to update, etc. 
+    # call this list `prev_next`?
     comptime IteratorType[
         iterable_mut: Bool,
         //,
